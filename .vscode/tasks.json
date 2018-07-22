@@ -1,0 +1,54 @@
+{
+    // See https://go.microsoft.com/fwlink/?LinkId=733558
+    // for the documentation about the tasks.json format
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "build",
+            "command": "dotnet build",
+            "type": "shell",
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build dotnet msbuild",
+            "command": "dotnet",
+            "type": "shell",
+            "args":[
+                "msbuild",
+                "HardwareSerialMonitor.csproj",
+                "/t:Build",
+                "/p:Configuration=Debug",
+                "/p:Platform=\"AnyCPU\""
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "build MSBuild",
+            "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\BuildTools\\MSBuild\\15.0\\Bin\\MSBuild.exe",
+            "type": "shell",
+            "args":[
+                "HardwareSerialMonitor.csproj",
+                "/t:Build",
+                "/p:Configuration=Debug",
+                "/p:Platform=\"AnyCPU\""
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        },
+        {
+            "label": "release",
+            "command": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\BuildTools\\MSBuild\\15.0\\Bin\\MSBuild.exe",
+            "type": "shell",
+            "args":[
+                "HardwareSerialMonitor.csproj",
+                "/t:Build",
+                "/p:Configuration=Release",
+                "/p:Platform=\"AnyCPU\""
+            ],
+            "group": "build",
+            "problemMatcher": "$msCompile"
+        }
+    ]
+}
