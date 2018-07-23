@@ -9,6 +9,7 @@ using System.Diagnostics;
 using HardwareSerialMonitor.Properties;
 using System.Runtime.InteropServices;
 using HardwareSerialMonitor.Utilities;
+using static HardwareSerialMonitor.Utilities.GnatStatsProtocol;
 
 namespace HardwareSerialMonitor
 {
@@ -173,6 +174,12 @@ namespace HardwareSerialMonitor
             Application.Exit();//if the application has been closed
         }
 
+        public new void Dispose()
+        {
+            Dispose(true);
+            ApplicationIcon.Icon = null;
+        }
+
         private void AutomaticPortSelect_Click(object sender, EventArgs e)// automatic port selection handler
         {
 
@@ -208,7 +215,7 @@ namespace HardwareSerialMonitor
             TryConnectPort(selected_port);
         }
 
-        private void SendToSerialPort(string data)//function to send the data to the arduino over the com port
+        private void SendToSerialPort(Packet packet)//function to send the data to the arduino over the com port
         {
             if (!mySerialPort.IsOpen)//if the port is not open
             {
@@ -223,7 +230,8 @@ namespace HardwareSerialMonitor
             }
             try
             {
-                mySerialPort.WriteLine(data);//try write to the manual port
+                byte[] data = Packet.GetBytes(packet);
+                mySerialPort.Write(data, 0, data.Length);//try write to the manual port
             }
             catch (Exception e)
             {

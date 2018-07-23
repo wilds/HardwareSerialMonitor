@@ -1,14 +1,127 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Diagnostics;
+﻿using OpenHardwareMonitor.Hardware;
+using System;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text;
-using System.Threading.Tasks;
 
 namespace HardwareSerialMonitor.Utilities
 {
     class GnatStatsProtocol
     {
+
+        public unsafe struct Packet
+        {
+
+            public const int STRING_SIZE = 32;
+
+            public fixed byte pcName[STRING_SIZE];
+
+            public fixed byte cpuName[STRING_SIZE];
+            public float cpuTemp;
+            public float cpuLoad;
+            public float cpuClock;
+
+            public fixed byte gpuName[STRING_SIZE];
+            public float gpuTemp;
+            public float gpuLoad;
+            public float gpuCoreClock;
+            public float gpuMemoryClock;
+            public float gpuShaderClock;
+
+            public float ramLoad;
+            public float ramUsed;
+            public float ramAvailable;
+
+            public void SetPcName(string name)
+            {
+                fixed (byte* p = Encoding.ASCII.GetBytes(name.PadRight(STRING_SIZE)))
+                fixed (byte* b = pcName)
+                {
+                    Buffer.MemoryCopy(p, b, STRING_SIZE, Math.Min(name.Length, STRING_SIZE));
+                }
+            }
+            public string GetPcName()
+            {
+                fixed (byte* b = pcName)
+                {
+                    return DecodeAscii(b);
+                }
+            }
+
+            public void SetCpuName(string name)
+            {
+                fixed (byte* p = Encoding.ASCII.GetBytes(name.PadRight(STRING_SIZE)))
+                fixed (byte* b = cpuName)
+                {
+                    Buffer.MemoryCopy(p, b, STRING_SIZE, Math.Min(name.Length, STRING_SIZE));
+                }
+            }
+            public string GetCpuName()
+            {
+                fixed (byte* b = cpuName)
+                {
+                    return DecodeAscii(b);
+                }
+            }
+
+            public void SetGpuName(string name)
+            {
+                fixed (byte* p = Encoding.ASCII.GetBytes(name.PadRight(STRING_SIZE)))
+                fixed (byte* b = gpuName)
+                {
+                    Buffer.MemoryCopy(p, b, STRING_SIZE, Math.Min(name.Length, STRING_SIZE));
+                }
+            }
+
+            public string GetGpuName()
+            {
+                fixed (byte* b = gpuName)
+                {
+                    return DecodeAscii(b);
+                }
+            }
+
+            public static byte[] GetBytes(Packet str)
+            {
+                int size = Marshal.SizeOf(str);
+                byte[] arr = new byte[size];
+
+                IntPtr ptr = Marshal.AllocHGlobal(size);
+                Marshal.StructureToPtr(str, ptr, true);
+                Marshal.Copy(ptr, arr, 0, size);
+                Marshal.FreeHGlobal(ptr);
+                return arr;
+            }
+
+            public static Packet FromBytes(byte[] arr)
+            {
+                Packet str = new Packet();
+
+                int size = Marshal.SizeOf(str);
+                IntPtr ptr = Marshal.AllocHGlobal(size);
+
+                Marshal.Copy(arr, 0, ptr, size);
+
+                str = (Packet)Marshal.PtrToStructure(ptr, str.GetType());
+                Marshal.FreeHGlobal(ptr);
+
+                return str;
+            }
+
+            private unsafe static string DecodeAscii(byte* buffer)
+            {
+                return new string((sbyte*)buffer);
+            }
+
+            // Safer
+            private static string DecodeAscii(byte[] buffer)
+            {
+                int count = Array.IndexOf<byte>(buffer, 0, 0);
+                if (count < 0) count = buffer.Length;
+                return Encoding.ASCII.GetString(buffer, 0, count);
+            }
+        }
+
         private OpenHardwareMonitor.Hardware.Computer thisComputer;                 //set 'thisComputer' as the name of the instance for the dll
 
         public GnatStatsProtocol()
@@ -24,163 +137,62 @@ namespace HardwareSerialMonitor.Utilities
             thisComputer.Open();
         }
 
-        public string BuildMessage() //function overload with 0 arguments, called when a with the default serial port on a timer
+
+
+        public Packet BuildMessage()
         {
-            string cpuTemp = "";
-            string gpuTemp = "";
-            string gpuLoad = "";
-            string cpuLoad = "";
-            string ramUsed = "";
-            string cpuName = "";
-            string gpuName = "";
-            string gpuCoreClock = "";
-            string gpuMemoryClock = "";
-            string gpuShaderClock = "";
-            string cpuClock = "";
-            int highestCPUClock = 0;
+            Packet packet = new Packet();
+
             // enumerating all the hardware
             foreach (OpenHardwareMonitor.Hardware.IHardware hw in thisComputer.Hardware)// for each hardware item thisComputer
             {
-                //Debug.WriteLine("Hardware Name="+hw.Name);
-                //Debug.WriteLine("Checking: " + hw.HardwareType);
-                if (hw.HardwareType.ToString().IndexOf("CPU") > -1)
+                hw.Update();
+                switch (hw.HardwareType)
                 {
-                    cpuName = "CPU:";
-                    cpuName += hw.Name;
-                }
-                else if (hw.HardwareType.ToString().IndexOf("Gpu") > -1)
-                {
-                    gpuName = "GPU:";
-                    gpuName += hw.Name;
-                }
-                hw.Update();                                                            //update it
-
-                // searching for all sensors and adding data to listbox
-                foreach (OpenHardwareMonitor.Hardware.ISensor s in hw.Sensors)          //for each sensor in the sensors part of the hardware
-                {
-                    //Console.WriteLine("Sensor: " + s.Name + " Type: " + s.SensorType + " Value: " + s.Value);
-                    if (s.SensorType == OpenHardwareMonitor.Hardware.SensorType.Temperature)   // if the sensor type is a temperature sensor
-                    {
-                        //Debug.WriteLine("s.Name=" + s.Name);
-                        if (s.Value != null)                                                  //if the value is not null
-                        {
-                            int curTemp = (int)s.Value;                                       //create a new int and set its value to the temperature value
-
-                            switch (s.Name)                                                   // create a switch based on the sensor name
-                            {
-                                case "CPU Package":                                           // if the name is "CPU package"
-                                    cpuTemp = curTemp.ToString();                             // set the string cpuTemp to the int value above converted to a string 
-                                    break;                                                    // break from the switch so it doesnt run the case below
-                                case "GPU Core":                                              //if the name is "GPU Core"
-                                    gpuTemp = curTemp.ToString();
-                                    break;
-                            }
-
-                        }
-                    }
-                    if (s.SensorType == OpenHardwareMonitor.Hardware.SensorType.Clock)   // if the sensor type is a temperature sensor
-                    {
-                        //Debug.WriteLine("s.Name=" + s.Name);
-                        if (s.Value != null)                                                  //if the value is not null
-                        {
-                            int clockSpeed = (int)s.Value;                                       //create a new int and set its value to the temperature value
-
-                            switch (s.Name)                                                   // create a switch based on the sensor name
-                            {
-                                // break from the switch so it doesnt run the case below
-                                case "GPU Core":                                              //if the name is "GPU Core"
-                                    gpuCoreClock = "|GCC" + clockSpeed.ToString();
-                                    break;
-                                case "GPU Memory":                                              //if the name is "GPU Memory"
-                                    gpuMemoryClock = "|GMC" + clockSpeed.ToString();
-                                    break;
-                                case "GPU Shader":                                              //if the name is "GPU Shader"
-                                    gpuShaderClock = "|GSC" + clockSpeed.ToString();
-                                    break;
-                            }
-                            if (s.Name.IndexOf("CPU Core") > -1)
-                            {
-                                if (clockSpeed > highestCPUClock) // run through each iteration of CPU Core and if the speed is higher than the last save it
-                                {
-                                    highestCPUClock = clockSpeed;
-                                    cpuClock = "|CHC" + highestCPUClock.ToString() + "|";
-                                }
-                            }
-
-                        }
-                    }
-                    if (s.SensorType == OpenHardwareMonitor.Hardware.SensorType.Load)           // if the sensor type is a load value
-                    {
-                        if (s.Value != null)                                                    // if the value is not null
-                        {
-                            int curLoad = (int)s.Value;                                         // create a new int and set its value to the sensor value
-                            switch (s.Name)                                                     //create a switch based on the name again
-                            {
-                                case "CPU Total":                                               //if the name is "CPU Total"
-                                    cpuLoad = curLoad.ToString();                               //set the string cpuLoad to the int value converted to a string
-                                    break;
-                                case "GPU Core":
-                                    gpuLoad = curLoad.ToString();
-                                    break;
-                            }
-                        }
-                    }
-                    if (s.SensorType == OpenHardwareMonitor.Hardware.SensorType.Data)           // if the sensor is a data value etc.etc.
-                    {
-                        if (s.Value != null)
-                        {
-                            switch (s.Name)
-                            {
-                                case "Used Memory":                                             //if the name is "used memory"
-                                    decimal decimalRam = Math.Round((decimal)s.Value, 1);       // create a new decimal and set the value to the sensor value a rounded to 1 decimal place
-                                    ramUsed = decimalRam.ToString();                            // set the ramused string to the decimal converted to a string
-                                    break;
-                            }
-                        }
-                    }
-                }
-                if (cpuTemp == "") // if there is no cpuTemp assigned from earlier functions, get the average cpu temp
-                {
-                    foreach (OpenHardwareMonitor.Hardware.ISensor s in hw.Sensors)          //for each sensor in the sensors part of the hardware
-                    {
-                        int numTemps = 0;
-                        int averageTemp = 0;
-                        try
-                        {
-                            if (s.SensorType == OpenHardwareMonitor.Hardware.SensorType.Temperature)   // if the sensor type is a temperature sensor
-                            {
-
-                                if (s.Name.IndexOf("CPU Core") > -1)
-                                {
-                                    averageTemp = averageTemp + (int)s.Value;
-                                    numTemps++;
-                                }
-
-                            }
-
-                            {
-                                averageTemp = averageTemp / numTemps;
-                                cpuTemp = averageTemp.ToString();
-                            }
-                        }
-                        catch { }
-
-                    }
+                    case HardwareType.Mainboard:
+                        packet.SetPcName(hw.Name);
+                        break;
+                    case HardwareType.CPU:
+                        packet.SetCpuName(hw.Name);
+                        packet.cpuTemp = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Temperature && i.Name.ToUpper().Contains("PACKAGE"))?.Value ?? 0f;
+                        packet.cpuClock = hw.Sensors.Where(i => i.SensorType == SensorType.Clock).Max(i => i.Value) ?? 0f;
+                        packet.cpuLoad = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Load && i.Name.ToUpper().Contains("TOTAL"))?.Value ?? 0f;
+                        break;
+                    case HardwareType.GpuNvidia:
+                    case HardwareType.GpuAti:
+                        packet.SetGpuName(hw.Name);
+                        packet.gpuTemp = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Temperature)?.Value ?? 0f;
+                        packet.gpuCoreClock = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Clock && i.Name.ToUpper().Contains("CORE"))?.Value ?? 0f;
+                        packet.gpuMemoryClock = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Clock && i.Name.ToUpper().Contains("MEMORY"))?.Value ?? 0f;
+                        packet.gpuShaderClock = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Clock && i.Name.ToUpper().Contains("SHADER"))?.Value ?? 0f;
+                        packet.gpuLoad = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Load && i.Name.ToUpper().Contains("TOTAL"))?.Value ?? 0f;
+                        break;
+                    case HardwareType.RAM:
+                        packet.ramLoad = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Load).Value ?? 0f;
+                        packet.ramUsed = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Data && i.Name.ToUpper().Contains("USED"))?.Value ?? 0f;
+                        packet.ramAvailable = hw.Sensors.FirstOrDefault(i => i.SensorType == SensorType.Data && i.Name.ToUpper().Contains("AVAILABLE"))?.Value ?? 0f;
+                        break;
                 }
             }
-            Debug.WriteLine("CPU Name:" + cpuName + " | GPU Name:" + gpuName);
-            Debug.WriteLine(gpuCoreClock + gpuMemoryClock + gpuShaderClock + cpuClock);
+            return packet;
+        }
+
+        public string BuildStringMessage() //function overload with 0 arguments, called when a with the default serial port on a timer
+        {
+            Packet packet = BuildMessage();
+
+            //Debug.WriteLine("CPU Name:" + cpuName + " | GPU Name:" + gpuName);
+            //Debug.WriteLine(gpuCoreClock + gpuMemoryClock + gpuShaderClock + cpuClock);
             string stats = string.Empty;//create a new string and instantiate it as empty
-            stats = "C" + cpuTemp + "c " + cpuLoad + "%|G" + gpuTemp + "c " + gpuLoad + "%|R" + ramUsed + "G|"; //write the strings to the new string along with separators and denotations the arduino can understand
-            Debug.WriteLine(stats);//output the string to the debug console
-            Debug.WriteLine(cpuName + gpuName);
+            stats = "C" + packet.cpuTemp + "c " + packet.cpuLoad + "%|G" + packet.gpuTemp + "c " + packet.gpuLoad + "%|R" + packet.ramUsed + "G|"; //write the strings to the new string along with separators and denotations the arduino can understand
+            //Debug.WriteLine(stats + cpuName + gpuName + gpuCoreClock + gpuMemoryClock + gpuShaderClock + cpuClock);
             if (stats != string.Empty)//so long as its not empty
             {
-                return stats + cpuName + gpuName + gpuCoreClock + gpuMemoryClock + gpuShaderClock + cpuClock;
+                return stats + packet.GetCpuName() + packet.GetGpuName() + packet.gpuCoreClock + packet.gpuMemoryClock + packet.gpuShaderClock + packet.cpuClock;
                 //SendToArduino(stats + cpuName + gpuName + gpuCoreClock + gpuMemoryClock + gpuShaderClock + cpuClock);//send the string to the function
                 // sendToArduino(cpuName+gpuName);
             }
-            return "";
+            return string.Empty;
         }
     }
 }
